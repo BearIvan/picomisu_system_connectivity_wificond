@@ -239,6 +239,12 @@ bool ClientInterfaceImpl::SignalPoll(vector<int32_t>* out_signal_poll_results) {
   // Convert from 100kbit/s to Mbps.
   out_signal_poll_results->push_back(
       static_cast<int32_t>(station_info.station_rx_bitrate/10));
+  // PICO extended station info.
+  out_signal_poll_results->push_back(station_info.station_fcs_error);
+  out_signal_poll_results->push_back(station_info.station_tx_bytes);
+  out_signal_poll_results->push_back(station_info.station_rx_bytes);
+  out_signal_poll_results->push_back(station_info.station_tx_rate_info);
+  out_signal_poll_results->push_back(station_info.station_rx_rate_info);
 
   return true;
 }

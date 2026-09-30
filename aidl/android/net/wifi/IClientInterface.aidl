@@ -34,6 +34,10 @@ interface IClientInterface {
   // Second element in array is the transmission bit rate in Mbps.
   // Third element in array is the association frequency in MHz.
   // Fourth element in array is the last received packet bit rate in Mbps.
+  // PICO: five more elements follow: the number of received frames with an FCS
+  // error, the transmitted bytes, the received bytes, the tx rate info and the
+  // rx rate info, each rate info being (type << 16) | (mcs << 8) | width in MHz
+  // with type 1 legacy, 2 HT, 3 VHT, 4 HE.
   // This call is valid only when interface is associated with an AP, otherwise
   // it returns an empty array.
   int[] signalPoll();

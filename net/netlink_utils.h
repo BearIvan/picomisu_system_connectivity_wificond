@@ -149,12 +149,22 @@ struct StationInfo {
               uint32_t station_tx_failed_,
               uint32_t station_tx_bitrate_,
               int8_t current_rssi_,
-              uint32_t station_rx_bitrate_)
+              uint32_t station_rx_bitrate_,
+              int32_t station_fcs_error_,
+              int32_t station_tx_bytes_,
+              int32_t station_rx_bytes_,
+              int32_t station_tx_rate_info_,
+              int32_t station_rx_rate_info_)
       : station_tx_packets(station_tx_packets_),
         station_tx_failed(station_tx_failed_),
         station_tx_bitrate(station_tx_bitrate_),
         current_rssi(current_rssi_),
-        station_rx_bitrate(station_rx_bitrate_) {}
+        station_rx_bitrate(station_rx_bitrate_),
+        station_fcs_error(station_fcs_error_),
+        station_tx_bytes(station_tx_bytes_),
+        station_rx_bytes(station_rx_bytes_),
+        station_tx_rate_info(station_tx_rate_info_),
+        station_rx_rate_info(station_rx_rate_info_) {}
   // Number of successfully transmitted packets.
   int32_t station_tx_packets;
   // Number of tramsmission failures.
@@ -165,6 +175,19 @@ struct StationInfo {
   int8_t current_rssi;
   // Last Received unicast packet bit rate in 100kbit/s.
   uint32_t station_rx_bitrate;
+  // PICO: extended station info, reported by signalPoll() after the 4 standard values.
+  // Number of received frames (MPDUs) with an FCS error.
+  int32_t station_fcs_error;
+  // Number of transmitted bytes (u32 NL80211_STA_INFO_TX_BYTES).
+  int32_t station_tx_bytes;
+  // Number of received bytes (u32 NL80211_STA_INFO_RX_BYTES).
+  int32_t station_rx_bytes;
+  // Rate info of the last transmitted / received unicast packet:
+  // (type << 16) | (mcs << 8) | channel width in MHz, where type is
+  // 1 legacy (no MCS, no width), 2 HT, 3 VHT, 4 HE; width is 10, 40, 80 or 20.
+  // The rx rate info is 0 when the station reports no rx bitrate.
+  int32_t station_tx_rate_info;
+  int32_t station_rx_rate_info;
   // There are many other counters/parameters included in station info.
   // We will add them once we find them useful.
 };

@@ -541,6 +541,36 @@ bool NetlinkUtils::ParseBandInfo(const NL80211Packet* const packet,
   return true;
 }
 
+// PICO: encodes the rate info of a NL80211_STA_INFO_{TX,RX}_BITRATE attribute as
+// (type << 16) | (mcs << 8) | channel width in MHz.
+// type: 1 legacy, 2 HT (NL80211_RATE_INFO_MCS), 3 VHT, 4 HE.
+// A legacy rate carries neither an MCS nor a width.
+static int32_t GetStationRateInfo(const NL80211NestedAttr& bitrate_attr) {
+  int8_t mcs;
+  int32_t rate_type;
+  if (bitrate_attr.GetAttributeValue(NL80211_RATE_INFO_MCS, &mcs)) {
+    rate_type = 0x20000;
+  } else if (bitrate_attr.GetAttributeValue(NL80211_RATE_INFO_VHT_MCS, &mcs)) {
+    rate_type = 0x30000;
+  } else if (bitrate_attr.GetAttributeValue(NL80211_RATE_INFO_HE_MCS, &mcs)) {
+    rate_type = 0x40000;
+  } else {
+    return 0x10000;
+  }
+  int32_t rate_info = rate_type | (static_cast<int32_t>(mcs) << 8);
+  NL80211NestedAttr width_attr(0);
+  if (bitrate_attr.GetAttribute(NL80211_RATE_INFO_10_MHZ_WIDTH, &width_attr)) {
+    return rate_info | 10;
+  }
+  if (bitrate_attr.GetAttribute(NL80211_RATE_INFO_40_MHZ_WIDTH, &width_attr)) {
+    return rate_info | 40;
+  }
+  if (bitrate_attr.GetAttribute(NL80211_RATE_INFO_80_MHZ_WIDTH, &width_attr)) {
+    return rate_info | 80;
+  }
+  return rate_info | 20;
+}
+
 bool NetlinkUtils::GetStationInfo(uint32_t interface_index,
                                   const array<uint8_t, ETH_ALEN>& mac_address,
                                   StationInfo* out_station_info) {
@@ -579,6 +609,21 @@ bool NetlinkUtils::GetStationInfo(uint32_t interface_index,
     LOG(ERROR) << "Failed to get NL80211_STA_INFO_TX_FAILED";
     return false;
   }
+  int32_t fcs_error;
+  if (!sta_info.GetAttributeValue(NL80211_STA_INFO_FCS_ERROR_COUNT, &fcs_error)) {
+    LOG(ERROR) << "Failed to get NL80211_STA_INFO_FCS_ERROR_COUNT";
+    return false;
+  }
+  int32_t tx_bytes;
+  if (!sta_info.GetAttributeValue(NL80211_STA_INFO_TX_BYTES, &tx_bytes)) {
+    LOG(ERROR) << "Failed to get NL80211_STA_INFO_TX_BYTES";
+    return false;
+  }
+  int32_t rx_bytes;
+  if (!sta_info.GetAttributeValue(NL80211_STA_INFO_RX_BYTES, &rx_bytes)) {
+    LOG(ERROR) << "Failed to get NL80211_STA_INFO_RX_BYTES";
+    return false;
+  }
   int8_t current_rssi;
   if (!sta_info.GetAttributeValue(NL80211_STA_INFO_SIGNAL, &current_rssi)) {
     LOG(ERROR) << "Failed to get NL80211_STA_INFO_SIGNAL";
@@ -586,6 +631,7 @@ bool NetlinkUtils::GetStationInfo(uint32_t interface_index,
   }
   NL80211NestedAttr tx_bitrate_attr(0);
   uint32_t tx_bitrate = 0;
+  int32_t tx_rate_info = 0;
   if (sta_info.GetAttribute(NL80211_STA_INFO_TX_BITRATE,
                             &tx_bitrate_attr)) {
     if (!tx_bitrate_attr.GetAttributeValue(NL80211_RATE_INFO_BITRATE32,
@@ -593,12 +639,14 @@ bool NetlinkUtils::GetStationInfo(uint32_t interface_index,
       // Return invalid tx rate to avoid breaking the get station cmd
       tx_bitrate = 0;
     }
+    tx_rate_info = GetStationRateInfo(tx_bitrate_attr);
   } else {
       LOG(ERROR) << "Failed to get NL80211_STA_INFO_TX_BITRATE";
       return false;
   }
   NL80211NestedAttr rx_bitrate_attr(0);
   uint32_t rx_bitrate = 0;
+  int32_t rx_rate_info = 0;
   if (sta_info.GetAttribute(NL80211_STA_INFO_RX_BITRATE,
                             &rx_bitrate_attr)) {
     if (!rx_bitrate_attr.GetAttributeValue(NL80211_RATE_INFO_BITRATE32,
@@ -606,8 +654,10 @@ bool NetlinkUtils::GetStationInfo(uint32_t interface_index,
       // Return invalid rx rate to avoid breaking the get station cmd
       rx_bitrate = 0;
     }
+    rx_rate_info = GetStationRateInfo(rx_bitrate_attr);
   }
-  *out_station_info = StationInfo(tx_good, tx_bad, tx_bitrate, current_rssi, rx_bitrate);
+  *out_station_info = StationInfo(tx_good, tx_bad, tx_bitrate, current_rssi, rx_bitrate,
+                                  fcs_error, tx_bytes, rx_bytes, tx_rate_info, rx_rate_info);
   return true;
 }
 
